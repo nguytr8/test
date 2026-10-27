@@ -1,0 +1,108 @@
+/*@!Encoding:1252*/
+variables
+{
+  msTimer tRadarStartupWindow;
+
+  int startupWindowOpen;
+  int seen_5003;
+  int seen_6742;
+}
+
+on start
+{
+  startupWindowOpen = 1;
+
+  seen_5003 = 0;
+  seen_6742 = 0;
+
+  setTimer(tRadarStartupWindow, 1000); // 1 second after measurement start
+
+  write("Radar startup check started (window = 1s) for ID 18DAF1B0x.");
+}
+
+// Extended 29-bit ID from your log: 18DAF1B0x ==> RADAR
+on message 0x18DAF1B0x
+{
+  if (!startupWindowOpen) return;
+  if (this.dlc != 8) return;
+
+  // Frame 1: 02 50 03 55 55 55 55 55
+  if (this.byte(0) == 0x02 &&
+      this.byte(1) == 0x50 &&
+      this.byte(2) == 0x03 &&
+      this.byte(3) == 0x55 &&
+      this.byte(4) == 0x55 &&
+      this.byte(5) == 0x55 &&
+      this.byte(6) == 0x55 &&
+      this.byte(7) == 0x55)
+  {
+    seen_5003 = 1;
+  }
+
+
+  // Frame 3: 07 67 42 
+  else if (this.byte(0) == 0x02 &&
+           this.byte(1) == 0x67 &&
+           this.byte(2) == 0x42 &&
+           this.byte(3) == 0x55 &&
+           this.byte(4) == 0x55 &&
+           this.byte(5) == 0x55 &&
+           this.byte(6) == 0x55 &&
+           this.byte(7) == 0x55)
+  {
+    seen_6742 = 1;
+  }
+}
+
+// Extended 29-bit ID from your log: 0x18DAF1B5x ==> MPC
+on message 0x18DAF1B5x
+{
+  if (!startupWindowOpen) return;
+  if (this.dlc != 8) return;
+
+  // Frame 1: 02 50 03 55 55 55 55 55
+  if (this.byte(0) == 0x02 &&
+      this.byte(1) == 0x50 &&
+      this.byte(2) == 0x03 &&
+      this.byte(3) == 0x55 &&
+      this.byte(4) == 0x55 &&
+      this.byte(5) == 0x55 &&
+      this.byte(6) == 0x55 &&
+      this.byte(7) == 0x55)
+  {
+    seen_5003 = 1;
+  }
+ 
+
+  // Frame 3: 02 67 42
+  else if (this.byte(0) == 0x02 &&
+           this.byte(1) == 0x67 &&
+           this.byte(2) == 0x42 &&
+           this.byte(3) == 0x55 &&
+           this.byte(4) == 0x55 &&
+           this.byte(5) == 0x55 &&
+           this.byte(6) == 0x55 &&
+           this.byte(7) == 0x55)
+  {
+    seen_6742 = 1;
+  }
+}
+
+on timer tRadarStartupWindow
+{
+  startupWindowOpen = 0;
+
+  if (seen_5003 && seen_6742)
+  {
+    write("PASS: All required Radar startup frames received within 1s.");
+    @Env_MaxholdStartup = 1;
+  }
+  else
+  {
+    write("FAIL: Missing Radar startup frame(s) within 1s.");
+    if (!seen_5003) write("  Missing: 02 10 03 55 55 55 55 55");
+    
+    if (!seen_6742) write("  Missing: 07 27 42 1F CD 11 2D EA");
+    @Env_MaxholdStartup = 0;
+  }
+}
